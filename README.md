@@ -40,7 +40,7 @@ The script relies on the following environment variables:
 
 3. Run the script:
     ```sh
-    php script.php
+    php recurring-issue-generator.php
     ```
 
 ## Jenkins Integration
