@@ -159,6 +159,8 @@ try {
 
     echo "Creating an issue for {$project['name']}\n";
     create_github_issue($project['repo'], $project['user'], $github_token, $title, $body);
+    // Making sure we do not hit API limits.
+    sleep(2);
   }
 }
 catch (\Exception $e) {
