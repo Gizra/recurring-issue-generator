@@ -1,5 +1,7 @@
 # GitHub Issue Creator
 
+[![Build Status](https://app.travis-ci.com/Gizra/recurring-issue-generator.svg?token=XsECVJv635dcj4fku2xo&branch=main)](https://app.travis-ci.com/Gizra/recurring-issue-generator)
+
 This project automates the creation of GitHub issues based on specified frequency and project configurations set through environment variables.
 
 ## Features
