@@ -2,9 +2,9 @@
 
 const TRIM_CHARS = " \n\r\t\v\x00\"";
 
-$github_token = trim(getenv('GITHUB_TOKEN'), TRIM_CHARS);
-$title = trim(getenv('ISSUE_TITLE'), TRIM_CHARS);
-$body = trim(getenv('ISSUE_BODY'), TRIM_CHARS);
+$github_token = trim((string)getenv('GITHUB_TOKEN'), TRIM_CHARS);
+$title = trim((string)getenv('ISSUE_TITLE'), TRIM_CHARS);
+$body = trim((string)getenv('ISSUE_BODY'), TRIM_CHARS);
 
 /**
  * Retrieves the project configurations from the environment variables.
@@ -18,7 +18,7 @@ $body = trim(getenv('ISSUE_BODY'), TRIM_CHARS);
  * - 'user': The user associated with the project, extracted from the second part of the value.
  * - 'repo': The repository associated with the project, extracted from the third part of the value.
  *
- * @return array
+ * @return array<array<string, string>>
  *   An array of project configurations.
  */
 function get_project_configs(): array {
@@ -44,19 +44,21 @@ function get_project_configs(): array {
  *   The HTTP method to use (e.g., GET, POST).
  * @param string $url
  *   The URL of the API endpoint.
- * @param array $data
+ * @param array<string, mixed> $data
  *   The data to send with the request (for POST requests).
  * @param string $github_token
  *   The GitHub token for authentication.
  *
  * @return mixed
  *   The response from the API as a decoded JSON object.
- *@throws Exception
+ * @throws Exception
  *   If there is an error with the cURL request.
- *
  */
 function call_github_api(string $method, string $url, array $data, string $github_token) {
   $ch = curl_init($url);
+  if ($ch === FALSE) {
+    throw new Exception('CURL initialization failed.');
+  }
   curl_setopt($ch, CURLOPT_RETURNTRANSFER, TRUE);
   curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Authorization: token ' . $github_token,
@@ -72,7 +74,7 @@ function call_github_api(string $method, string $url, array $data, string $githu
     throw new Exception('CURL error: ' . curl_error($ch));
   }
   curl_close($ch);
-  return json_decode($response, TRUE);
+  return json_decode((string)$response, TRUE);
 }
 
 /**
@@ -91,8 +93,7 @@ function call_github_api(string $method, string $url, array $data, string $githu
  *
  * @return mixed
  *   The response from the GitHub API as a decoded JSON object.
- *
- *@throws Exception
+ * @throws Exception
  *   If there is an error with the GitHub API request.
  */
 function create_github_issue(string $repo, string $user, string $github_token, string $title, string $body) {
@@ -122,8 +123,11 @@ function create_github_issue(string $repo, string $user, string $github_token, s
  */
 function check_last_issue(string $repo, string $frequency, string $github_token, string $title): bool {
   $issues = call_github_api('GET', "https://api.github.com/repos/$repo/issues?state=all&per_page=100", [], $github_token);
+  if (!is_array($issues)) {
+    throw new Exception('Failed to fetch issues.');
+  }
   foreach ($issues as $issue) {
-    if ($issue['title'] === $title) {
+    if (is_array($issue) && isset($issue['title']) && $issue['title'] === $title) {
       $last_issue_date = new DateTime($issue['created_at']);
       $current_date = new DateTime();
       $interval = $current_date->diff($last_issue_date)->days;
@@ -137,6 +141,8 @@ function check_last_issue(string $repo, string $frequency, string $github_token,
           return $interval >= 30;
         case 'Quarterly':
           return $interval >= 90;
+        default:
+          return FALSE;
       }
     }
   }
