@@ -47,17 +47,17 @@ function get_project_configs(): array {
  *   The HTTP method to use (e.g., GET, POST).
  * @param string $url
  *   The URL of the API endpoint.
- * @param array<string, mixed> $data
- *   The data to send with the request (for POST requests).
  * @param string $github_token
  *   The GitHub token for authentication.
+ * @param array<string, mixed> $data
+ *    The data to send with the request (for POST requests).
  *
  * @return mixed
  *   The response from the API as a decoded JSON object.
  * @throws Exception
  *   If there is an error with the cURL request.
  */
-function call_github_api(string $method, string $url, array $data = [], string $github_token) {
+function call_github_api(string $method, string $url, string $github_token, array $data = []) {
   $ch = curl_init($url);
   if ($ch === FALSE) {
     throw new Exception('CURL initialization failed.');
@@ -111,8 +111,11 @@ function create_github_issue(string $repo, string $user, string $github_token, s
     'assignees' => [$user],
     'labels' => [$label]
   ];
-  $issue = call_github_api('POST', "https://api.github.com/repos/$repo/issues", $data, $github_token);
-  add_issue_to_project_board($repo, $issue['id'], $github_token);
+  $issue = call_github_api('POST', "https://api.github.com/repos/$repo/issues", $github_token, $data);
+  if (!is_array($issue) || !isset($issue['id'])) {
+    throw new Exception('Issue creation failed.');
+  }
+  add_issue_to_project_board($repo, (int) $issue['id'], $github_token);
   add_manager_comment($repo, $issue['number'], $manager, $github_token);
   return $issue;
 }
@@ -138,7 +141,7 @@ function create_github_issue(string $repo, string $user, string $github_token, s
  * @throws \Exception
  */
 function check_last_issue(string $repo, string $frequency, string $github_token, string $title): bool {
-  $issues = call_github_api('GET', "https://api.github.com/repos/$repo/issues?state=all&per_page=100", [], $github_token);
+  $issues = call_github_api('GET', "https://api.github.com/repos/$repo/issues?state=all&per_page=100", $github_token);
   if (!is_array($issues)) {
     throw new Exception('Failed to fetch issues.');
   }
@@ -179,18 +182,18 @@ function check_last_issue(string $repo, string $frequency, string $github_token,
  *   If there is an error with the GitHub API request.
  */
 function add_issue_to_project_board(string $repo, int $issue_id, string $github_token): void {
-  $projects = call_github_api('GET', "https://api.github.com/repos/$repo/projects", [], $github_token);
+  $projects = call_github_api('GET', "https://api.github.com/repos/$repo/projects", $github_token);
   if (!is_array($projects)) {
     throw new Exception('Failed to fetch projects.');
   }
   foreach ($projects as $project) {
-    $columns = call_github_api('GET', $project['columns_url'], [], $github_token);
+    $columns = call_github_api('GET', $project['columns_url'], $github_token);
     if (!is_array($columns)) {
       throw new Exception('Failed to fetch project columns.');
     }
     foreach ($columns as $column) {
       if (strtolower($column['name']) === 'to do') {
-        call_github_api('POST', $column['cards_url'], ['content_id' => $issue_id, 'content_type' => 'Issue'], $github_token);
+        call_github_api('POST', $column['cards_url'], $github_token, ['content_id' => $issue_id, 'content_type' => 'Issue']);
         return;
       }
     }
@@ -214,7 +217,7 @@ function add_issue_to_project_board(string $repo, int $issue_id, string $github_
  */
 function add_manager_comment(string $repo, int $issue_number, string $manager, string $github_token): void {
   $comment = ['body' => "//cc @$manager"];
-  call_github_api('POST', "https://api.github.com/repos/$repo/issues/$issue_number/comments", $comment, $github_token);
+  call_github_api('POST', "https://api.github.com/repos/$repo/issues/$issue_number/comments", $github_token, $comment);
 }
 
 try {
