@@ -5,6 +5,7 @@ const TRIM_CHARS = " \n\r\t\v\x00\"";
 $github_token = trim((string)getenv('GITHUB_TOKEN'), TRIM_CHARS);
 $title = trim((string)getenv('ISSUE_TITLE'), TRIM_CHARS);
 $body = trim((string)getenv('ISSUE_BODY'), TRIM_CHARS);
+$label = trim((string)getenv('ISSUE_LABEL'), TRIM_CHARS) ?: 'maintenance';
 
 /**
  * Retrieves the project configurations from the environment variables.
@@ -17,6 +18,7 @@ $body = trim((string)getenv('ISSUE_BODY'), TRIM_CHARS);
  * - 'frequency': The frequency of the project, extracted from the first part of the value.
  * - 'user': The user associated with the project, extracted from the second part of the value.
  * - 'repo': The repository associated with the project, extracted from the third part of the value.
+ * - 'manager': The GitHub handle of the project manager, extracted from the fourth part of the value.
  *
  * @return array<array<string, string>>
  *   An array of project configurations.
@@ -31,6 +33,7 @@ function get_project_configs(): array {
         'frequency' => trim($parts[0], TRIM_CHARS),
         'user' => trim($parts[1]),
         'repo' => trim($parts[2], TRIM_CHARS),
+        'manager' => trim($parts[3], TRIM_CHARS),
       ];
     }
   }
@@ -54,7 +57,7 @@ function get_project_configs(): array {
  * @throws Exception
  *   If there is an error with the cURL request.
  */
-function call_github_api(string $method, string $url, array $data, string $github_token) {
+function call_github_api(string $method, string $url, array $data = [], string $github_token) {
   $ch = curl_init($url);
   if ($ch === FALSE) {
     throw new Exception('CURL initialization failed.');
@@ -63,6 +66,7 @@ function call_github_api(string $method, string $url, array $data, string $githu
   curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Authorization: token ' . $github_token,
     'User-Agent: RecurringIssueGenerator 0.1',
+    'Content-Type: application/json'
   ]);
   if ($method === 'POST') {
     curl_setopt($ch, CURLOPT_POST, TRUE);
@@ -90,15 +94,27 @@ function call_github_api(string $method, string $url, array $data, string $githu
  *   The title of the issue.
  * @param string $body
  *   The body of the issue.
+ * @param string $label
+ *   The label for the issue.
+ * @param string $manager
+ *   The GitHub handle of the project manager.
  *
  * @return mixed
  *   The response from the GitHub API as a decoded JSON object.
  * @throws Exception
  *   If there is an error with the GitHub API request.
  */
-function create_github_issue(string $repo, string $user, string $github_token, string $title, string $body) {
-  $data = ['title' => $title, 'body' => $body, 'assignees' => [$user]];
-  return call_github_api('POST', "https://api.github.com/repos/$repo/issues", $data, $github_token);
+function create_github_issue(string $repo, string $user, string $github_token, string $title, string $body, string $label, string $manager) {
+  $data = [
+    'title' => $title,
+    'body' => $body,
+    'assignees' => [$user],
+    'labels' => [$label]
+  ];
+  $issue = call_github_api('POST', "https://api.github.com/repos/$repo/issues", $data, $github_token);
+  add_issue_to_project_board($repo, $issue['id'], $github_token);
+  add_manager_comment($repo, $issue['number'], $manager, $github_token);
+  return $issue;
 }
 
 /**
@@ -149,6 +165,58 @@ function check_last_issue(string $repo, string $frequency, string $github_token,
   return TRUE;
 }
 
+/**
+ * Adds the issue to the "To Do" column of the respective project board.
+ *
+ * @param string $repo
+ *   The name of the repository.
+ * @param int $issue_id
+ *   The ID of the issue.
+ * @param string $github_token
+ *   The GitHub token for authentication.
+ *
+ * @throws \Exception
+ *   If there is an error with the GitHub API request.
+ */
+function add_issue_to_project_board(string $repo, int $issue_id, string $github_token): void {
+  $projects = call_github_api('GET', "https://api.github.com/repos/$repo/projects", [], $github_token);
+  if (!is_array($projects)) {
+    throw new Exception('Failed to fetch projects.');
+  }
+  foreach ($projects as $project) {
+    $columns = call_github_api('GET', $project['columns_url'], [], $github_token);
+    if (!is_array($columns)) {
+      throw new Exception('Failed to fetch project columns.');
+    }
+    foreach ($columns as $column) {
+      if (strtolower($column['name']) === 'to do') {
+        call_github_api('POST', $column['cards_url'], ['content_id' => $issue_id, 'content_type' => 'Issue'], $github_token);
+        return;
+      }
+    }
+  }
+}
+
+/**
+ * Adds a comment to the issue tagging the project manager.
+ *
+ * @param string $repo
+ *   The name of the repository.
+ * @param int $issue_number
+ *   The number of the issue.
+ * @param string $manager
+ *   The GitHub handle of the project manager.
+ * @param string $github_token
+ *   The GitHub token for authentication.
+ *
+ * @throws \Exception
+ *   If there is an error with the GitHub API request.
+ */
+function add_manager_comment(string $repo, int $issue_number, string $manager, string $github_token): void {
+  $comment = ['body' => "//cc @$manager"];
+  call_github_api('POST', "https://api.github.com/repos/$repo/issues/$issue_number/comments", $comment, $github_token);
+}
+
 try {
   $projects = get_project_configs();
   foreach ($projects as $project) {
@@ -158,7 +226,7 @@ try {
     }
 
     echo "Creating an issue for {$project['name']}\n";
-    create_github_issue($project['repo'], $project['user'], $github_token, $title, $body);
+    create_github_issue($project['repo'], $project['user'], $github_token, $title, $body, $label, $project['manager']);
     // Making sure we do not hit API limits.
     sleep(2);
   }
