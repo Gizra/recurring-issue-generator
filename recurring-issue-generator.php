@@ -33,7 +33,7 @@ function get_project_configs(): array {
         'frequency' => trim($parts[0], TRIM_CHARS),
         'user' => trim($parts[1]),
         'repo' => trim($parts[2], TRIM_CHARS),
-        'manager' => isset($parts[3]) ? trim($parts[3]) : NULL,
+        'manager' => isset($parts[3]) ? trim($parts[3], TRIM_CHARS) : NULL,
       ];
     }
   }
