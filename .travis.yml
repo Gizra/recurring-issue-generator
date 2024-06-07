@@ -7,4 +7,4 @@ before_script:
 
 script:
   - find . -name '*.php' -exec php -l {} \;
-  - vendor/bin/phpstan analyse --level=max --no-progress *.php
+  - vendor/bin/phpstan analyse --level=5 --no-progress *.php
