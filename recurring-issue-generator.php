@@ -115,7 +115,6 @@ function create_github_issue(string $repo, string $user, string $github_token, s
   if (!is_array($issue) || !isset($issue['id'])) {
     throw new Exception('Issue creation failed.');
   }
-  add_issue_to_project_board($repo, (int) $issue['id'], $github_token);
   add_manager_comment($repo, $issue['number'], $manager, $github_token);
   return $issue;
 }
@@ -166,38 +165,6 @@ function check_last_issue(string $repo, string $frequency, string $github_token,
     }
   }
   return TRUE;
-}
-
-/**
- * Adds the issue to the "To Do" column of the respective project board.
- *
- * @param string $repo
- *   The name of the repository.
- * @param int $issue_id
- *   The ID of the issue.
- * @param string $github_token
- *   The GitHub token for authentication.
- *
- * @throws \Exception
- *   If there is an error with the GitHub API request.
- */
-function add_issue_to_project_board(string $repo, int $issue_id, string $github_token): void {
-  $projects = call_github_api('GET', "https://api.github.com/repos/$repo/projects", $github_token);
-  if (!is_array($projects)) {
-    throw new Exception('Failed to fetch projects.');
-  }
-  foreach ($projects as $project) {
-    $columns = call_github_api('GET', $project['columns_url'], $github_token);
-    if (!is_array($columns)) {
-      throw new Exception('Failed to fetch project columns.');
-    }
-    foreach ($columns as $column) {
-      if (strtolower($column['name']) === 'to do') {
-        call_github_api('POST', $column['cards_url'], $github_token, ['content_id' => $issue_id, 'content_type' => 'Issue']);
-        return;
-      }
-    }
-  }
 }
 
 /**
