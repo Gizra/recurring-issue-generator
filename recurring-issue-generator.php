@@ -33,7 +33,7 @@ function get_project_configs(): array {
         'frequency' => trim($parts[0], TRIM_CHARS),
         'user' => trim($parts[1]),
         'repo' => trim($parts[2], TRIM_CHARS),
-        'manager' => trim($parts[3], TRIM_CHARS),
+        'manager' => isset($parts[3]) ? trim($parts[3]) : NULL,
       ];
     }
   }
@@ -96,15 +96,14 @@ function call_github_api(string $method, string $url, string $github_token, arra
  *   The body of the issue.
  * @param string $label
  *   The label for the issue.
- * @param string $manager
+ * @param string|null $manager
  *   The GitHub handle of the project manager.
  *
  * @return mixed
  *   The response from the GitHub API as a decoded JSON object.
- * @throws Exception
- *   If there is an error with the GitHub API request.
+ * @throws \Exception If there is an error with the GitHub API request.
  */
-function create_github_issue(string $repo, string $user, string $github_token, string $title, string $body, string $label, string $manager) {
+function create_github_issue(string $repo, string $user, string $github_token, string $title, string $body, string $label, string $manager = NULL) {
   $data = [
     'title' => $title,
     'body' => $body,
@@ -115,7 +114,9 @@ function create_github_issue(string $repo, string $user, string $github_token, s
   if (!is_array($issue) || !isset($issue['id'])) {
     throw new Exception('Issue creation failed.');
   }
-  add_manager_comment($repo, $issue['number'], $manager, $github_token);
+  if ($manager) {
+    add_manager_comment($repo, $issue['number'], $manager, $github_token);
+  }
   return $issue;
 }
 
