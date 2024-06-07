@@ -20,7 +20,7 @@ $label = trim((string)getenv('ISSUE_LABEL'), TRIM_CHARS) ?: 'maintenance';
  * - 'repo': The repository associated with the project, extracted from the third part of the value.
  * - 'manager': The GitHub handle of the project manager, extracted from the fourth part of the value.
  *
- * @return array<array<string, string>>
+ * @return array
  *   An array of project configurations.
  */
 function get_project_configs(): array {
