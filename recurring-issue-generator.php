@@ -110,12 +110,12 @@ function create_github_issue(string $repo, string $user, string $github_token, s
     'assignees' => [$user],
     'labels' => [$label]
   ];
+  if ($manager) {
+    $data['body'] .= "\n\n//cc @" . $manager;
+  }
   $issue = call_github_api('POST', "https://api.github.com/repos/$repo/issues", $github_token, $data);
   if (!is_array($issue) || !isset($issue['id'])) {
     throw new Exception('Issue creation failed.');
-  }
-  if ($manager) {
-    add_manager_comment($repo, $issue['number'], $manager, $github_token);
   }
   return $issue;
 }
@@ -166,43 +166,4 @@ function check_last_issue(string $repo, string $frequency, string $github_token,
     }
   }
   return TRUE;
-}
-
-/**
- * Adds a comment to the issue tagging the project manager.
- *
- * @param string $repo
- *   The name of the repository.
- * @param int $issue_number
- *   The number of the issue.
- * @param string $manager
- *   The GitHub handle of the project manager.
- * @param string $github_token
- *   The GitHub token for authentication.
- *
- * @throws \Exception
- *   If there is an error with the GitHub API request.
- */
-function add_manager_comment(string $repo, int $issue_number, string $manager, string $github_token): void {
-  $comment = ['body' => "//cc @$manager"];
-  call_github_api('POST', "https://api.github.com/repos/$repo/issues/$issue_number/comments", $github_token, $comment);
-}
-
-try {
-  $projects = get_project_configs();
-  foreach ($projects as $project) {
-    if (!check_last_issue($project['repo'], $project['frequency'], $github_token, $title)) {
-      echo "Skipping {$project['name']}, not yet time to notify.\n";
-      continue;
-    }
-
-    echo "Creating an issue for {$project['name']}\n";
-    create_github_issue($project['repo'], $project['user'], $github_token, $title, $body, $label, $project['manager']);
-    // Making sure we do not hit API limits.
-    sleep(2);
-  }
-}
-catch (\Exception $e) {
-  echo "Error: {$e->getMessage()}\n";
-  exit(1);
 }
