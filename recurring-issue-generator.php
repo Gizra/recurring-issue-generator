@@ -167,3 +167,22 @@ function check_last_issue(string $repo, string $frequency, string $github_token,
   }
   return TRUE;
 }
+
+try {
+  $projects = get_project_configs();
+  foreach ($projects as $project) {
+    if (!check_last_issue($project['repo'], $project['frequency'], $github_token, $title)) {
+      echo "Skipping {$project['name']}, not yet time to notify.\n";
+      continue;
+    }
+
+    echo "Creating an issue for {$project['name']}\n";
+    create_github_issue($project['repo'], $project['user'], $github_token, $title, $body, $label, $project['manager']);
+    // Making sure we do not hit API limits.
+    sleep(2);
+  }
+}
+catch (\Exception $e) {
+  echo "Error: {$e->getMessage()}\n";
+  exit(1);
+}
