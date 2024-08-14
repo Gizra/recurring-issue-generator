@@ -107,7 +107,7 @@ function create_github_issue(string $repo, string $user, string $github_token, s
   $data = [
     'title' => $title,
     'body' => $body,
-    'assignees' => [$user],
+    'assignees' => explode(',', $user),
     'labels' => [$label]
   ];
   if ($manager) {
