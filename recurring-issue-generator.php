@@ -37,7 +37,7 @@ $label = trim((string) getenv('ISSUE_LABEL'), TRIM_CHARS) ?: 'maintenance';
  * @return array
  *   An array of project configurations.
  */
-function getProjectConfigs(): array {
+function get_project_configs(): array {
   $configs = [];
   foreach (getenv() as $key => $value) {
     if (strpos($key, 'PROJECT_') === 0) {
@@ -72,7 +72,7 @@ function getProjectConfigs(): array {
  * @throws \Exception
  *   If there is an error with the cURL request.
  */
-function callGithubApi(string $method, string $url, string $github_token, array $data = []) {
+function call_github_api(string $method, string $url, string $github_token, array $data = []) {
   $ch = curl_init($url);
   if ($ch === FALSE) {
     throw new Exception('CURL initialization failed.');
@@ -120,7 +120,7 @@ function callGithubApi(string $method, string $url, string $github_token, array 
  * @throws \Exception
  *   If there is an error with the GitHub API request.
  */
-function createGithubIssue(string $repo, string $user, string $github_token, string $title, string $body, string $label, string $manager = NULL) {
+function create_github_issue(string $repo, string $user, string $github_token, string $title, string $body, string $label, ?string $manager = NULL) {
   $data = [
     'title' => $title,
     'body' => $body,
@@ -130,7 +130,7 @@ function createGithubIssue(string $repo, string $user, string $github_token, str
   if ($manager) {
     $data['body'] .= "\n\n//cc @" . $manager;
   }
-  $issue = callGithubApi('POST', "https://api.github.com/repos/$repo/issues", $github_token, $data);
+  $issue = call_github_api('POST', "https://api.github.com/repos/$repo/issues", $github_token, $data);
   if (!is_array($issue) || !isset($issue['id'])) {
     $error_message = 'Issue creation failed.';
     if (is_array($issue) && isset($issue['message'])) {
@@ -164,8 +164,8 @@ function createGithubIssue(string $repo, string $user, string $github_token, str
  * @throws \Exception
  *   If there is an error fetching issues from the GitHub API.
  */
-function checkLastIssue(string $repo, string $frequency, string $github_token, string $title): bool {
-  $issues = callGithubApi('GET', "https://api.github.com/repos/$repo/issues?state=all&per_page=100", $github_token);
+function check_last_issue(string $repo, string $frequency, string $github_token, string $title): bool {
+  $issues = call_github_api('GET', "https://api.github.com/repos/$repo/issues?state=all&per_page=100", $github_token);
   if (!is_array($issues)) {
     throw new Exception('Failed to fetch issues.');
   }
@@ -196,19 +196,19 @@ function checkLastIssue(string $repo, string $frequency, string $github_token, s
   return TRUE;
 }
 
-$projects = getProjectConfigs();
+$projects = get_project_configs();
 $failed_projects = [];
 $has_failures = FALSE;
 
 foreach ($projects as $project) {
   try {
-    if (!checkLastIssue($project['repo'], $project['frequency'], $github_token, $title)) {
+    if (!check_last_issue($project['repo'], $project['frequency'], $github_token, $title)) {
       echo "Skipping {$project['name']}, not yet time to notify.\n";
       continue;
     }
 
     echo "Creating an issue for {$project['name']}\n";
-    createGithubIssue($project['repo'], $project['user'], $github_token, $title, $body, $label, $project['manager']);
+    create_github_issue($project['repo'], $project['user'], $github_token, $title, $body, $label, $project['manager']);
     echo "Successfully created issue for {$project['name']}\n";
     // Making sure we do not hit API limits.
     sleep(2);
