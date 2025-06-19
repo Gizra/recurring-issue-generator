@@ -2,5 +2,10 @@
     "require-dev": {
         "phpstan/phpstan": "^1.8",
         "drupal/coder": "^8.3"
+    },
+    "config": {
+        "allow-plugins": {
+            "dealerdirect/phpcodesniffer-composer-installer": true
+        }
     }
 }
