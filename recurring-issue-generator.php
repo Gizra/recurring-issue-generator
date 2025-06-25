@@ -1,24 +1,38 @@
 <?php
 
+/**
+ * @file
+ * Recurring Issue Generator for GitHub repositories.
+ *
+ * This script creates recurring issues in GitHub repositories based on
+ * configured frequencies and project settings.
+ */
+
 const TRIM_CHARS = " \n\r\t\v\x00\"";
 
-$github_token = trim((string)getenv('GITHUB_TOKEN'), TRIM_CHARS);
-$title = trim((string)getenv('ISSUE_TITLE'), TRIM_CHARS);
-$body = trim((string)getenv('ISSUE_BODY'), TRIM_CHARS);
-$label = trim((string)getenv('ISSUE_LABEL'), TRIM_CHARS) ?: 'maintenance';
+$github_token = trim((string) getenv('GITHUB_TOKEN'), TRIM_CHARS);
+$title = trim((string) getenv('ISSUE_TITLE'), TRIM_CHARS);
+$body = trim((string) getenv('ISSUE_BODY'), TRIM_CHARS);
+$label = trim((string) getenv('ISSUE_LABEL'), TRIM_CHARS) ?: 'maintenance';
 
 /**
  * Retrieves the project configurations from the environment variables.
  *
- * This function iterates over the environment variables and extracts the project configurations
- * that start with the prefix 'PROJECT_'. It splits the value of each variable into parts using
- * the '|' delimiter and creates an array of configuration arrays. Each configuration array contains
- * the following keys:
- * - 'name': The name of the project, extracted from the environment variable name.
- * - 'frequency': The frequency of the project, extracted from the first part of the value.
- * - 'user': The user associated with the project, extracted from the second part of the value.
- * - 'repo': The repository associated with the project, extracted from the third part of the value.
- * - 'manager': The GitHub handle of the project manager, extracted from the fourth part of the value.
+ * This function iterates over the environment variables and extracts the
+ * project configurations that start with the prefix 'PROJECT_'. It splits
+ * the value of each variable into parts using the '|' delimiter and creates
+ * an array of configuration arrays. Each configuration array contains the
+ * following keys:
+ * - 'name': The name of the project, extracted from the environment variable
+ *   name.
+ * - 'frequency': The frequency of the project, extracted from the first part
+ *   of the value.
+ * - 'user': The user associated with the project, extracted from the second
+ *   part of the value.
+ * - 'repo': The repository associated with the project, extracted from the
+ *   third part of the value.
+ * - 'manager': The GitHub handle of the project manager, extracted from the
+ *   fourth part of the value.
  *
  * @return array
  *   An array of project configurations.
@@ -50,11 +64,12 @@ function get_project_configs(): array {
  * @param string $github_token
  *   The GitHub token for authentication.
  * @param array<string, mixed> $data
- *    The data to send with the request (for POST requests).
+ *   The data to send with the request (for POST requests).
  *
  * @return mixed
  *   The response from the API as a decoded JSON object.
- * @throws Exception
+ *
+ * @throws \Exception
  *   If there is an error with the cURL request.
  */
 function call_github_api(string $method, string $url, string $github_token, array $data = []) {
@@ -66,7 +81,7 @@ function call_github_api(string $method, string $url, string $github_token, arra
   curl_setopt($ch, CURLOPT_HTTPHEADER, [
     'Authorization: token ' . $github_token,
     'User-Agent: RecurringIssueGenerator 0.1',
-    'Content-Type: application/json'
+    'Content-Type: application/json',
   ]);
   if ($method === 'POST') {
     curl_setopt($ch, CURLOPT_POST, TRUE);
@@ -78,7 +93,7 @@ function call_github_api(string $method, string $url, string $github_token, arra
     throw new Exception('CURL error: ' . curl_error($ch));
   }
   curl_close($ch);
-  return json_decode((string)$response, TRUE);
+  return json_decode((string) $response, TRUE);
 }
 
 /**
@@ -101,28 +116,36 @@ function call_github_api(string $method, string $url, string $github_token, arra
  *
  * @return mixed
  *   The response from the GitHub API as a decoded JSON object.
- * @throws \Exception If there is an error with the GitHub API request.
+ *
+ * @throws \Exception
+ *   If there is an error with the GitHub API request.
  */
-function create_github_issue(string $repo, string $user, string $github_token, string $title, string $body, string $label, string $manager = NULL) {
+function create_github_issue(string $repo, string $user, string $github_token, string $title, string $body, string $label, ?string $manager = NULL) {
   $data = [
     'title' => $title,
     'body' => $body,
     'assignees' => explode(',', $user),
-    'labels' => [$label]
+    'labels' => [$label],
   ];
   if ($manager) {
     $data['body'] .= "\n\n//cc @" . $manager;
   }
   $issue = call_github_api('POST', "https://api.github.com/repos/$repo/issues", $github_token, $data);
   if (!is_array($issue) || !isset($issue['id'])) {
-    throw new Exception('Issue creation failed.');
+    $error_message = 'Issue creation failed.';
+    if (is_array($issue) && isset($issue['message'])) {
+      $error_message .= ' GitHub API error: ' . $issue['message'];
+      if (isset($issue['errors'])) {
+        $error_message .= ' Details: ' . json_encode($issue['errors']);
+      }
+    }
+    throw new Exception($error_message);
   }
   return $issue;
 }
 
 /**
- * Checks if the last issue with the given title in the specified repository
- * meets the recurrence frequency.
+ * Checks if the last issue with the given title meets the recurrence frequency.
  *
  * @param string $repo
  *   The name of the repository.
@@ -139,6 +162,7 @@ function create_github_issue(string $repo, string $user, string $github_token, s
  *   otherwise.
  *
  * @throws \Exception
+ *   If there is an error fetching issues from the GitHub API.
  */
 function check_last_issue(string $repo, string $frequency, string $github_token, string $title): bool {
   $issues = call_github_api('GET', "https://api.github.com/repos/$repo/issues?state=all&per_page=100", $github_token);
@@ -154,12 +178,16 @@ function check_last_issue(string $repo, string $frequency, string $github_token,
       switch ($frequency) {
         case 'Daily':
           return $interval >= 1;
+
         case 'Weekly':
           return $interval >= 7;
+
         case 'Monthly':
           return $interval >= 30;
+
         case 'Quarterly':
           return $interval >= 90;
+
         default:
           return FALSE;
       }
@@ -168,9 +196,12 @@ function check_last_issue(string $repo, string $frequency, string $github_token,
   return TRUE;
 }
 
-try {
-  $projects = get_project_configs();
-  foreach ($projects as $project) {
+$projects = get_project_configs();
+$failed_projects = [];
+$has_failures = FALSE;
+
+foreach ($projects as $project) {
+  try {
     if (!check_last_issue($project['repo'], $project['frequency'], $github_token, $title)) {
       echo "Skipping {$project['name']}, not yet time to notify.\n";
       continue;
@@ -178,11 +209,29 @@ try {
 
     echo "Creating an issue for {$project['name']}\n";
     create_github_issue($project['repo'], $project['user'], $github_token, $title, $body, $label, $project['manager']);
+    echo "Successfully created issue for {$project['name']}\n";
     // Making sure we do not hit API limits.
     sleep(2);
   }
+  catch (\Exception $e) {
+    $has_failures = TRUE;
+    $error_details = "Error processing {$project['name']} (repo: {$project['repo']}): {$e->getMessage()}";
+    echo $error_details . "\n";
+    $failed_projects[] = $error_details;
+    // Continue processing other projects.
+    continue;
+  }
 }
-catch (\Exception $e) {
-  echo "Error: {$e->getMessage()}\n";
+
+if ($has_failures) {
+  echo "\n=== SUMMARY ===\n";
+  echo "Script completed with failures. Failed projects:\n";
+  foreach ($failed_projects as $failure) {
+    echo "- $failure\n";
+  }
   exit(1);
+}
+else {
+  echo "\nAll projects processed successfully.\n";
+  exit(0);
 }

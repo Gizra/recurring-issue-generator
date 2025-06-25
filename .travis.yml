@@ -1,6 +1,7 @@
 language: php
 php:
-  - '7.4'
+  - '8.3'
+dist: noble
 
 before_script:
   - composer install
@@ -8,3 +9,4 @@ before_script:
 script:
   - find . -name '*.php' -exec php -l {} \;
   - vendor/bin/phpstan analyse --level=5 --no-progress *.php
+  - vendor/bin/phpcs --standard=Drupal --extensions=php,module,inc,install,test,profile,theme,css,info,txt,md --ignore=vendor/ .
